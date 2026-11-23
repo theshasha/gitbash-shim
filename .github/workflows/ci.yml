@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Show environment
+        run: |
+          gcc --version
+          git --version
+          node --version
+          chcp
+
+      - name: Build bash.exe
+        run: gcc -O2 -s -static -municode -o bash.exe gitbash-shim.c -lshell32 -ladvapi32
+
+      - name: Build shim-noreg.exe (skips the registry, for test-locate.mjs)
+        run: gcc -O2 -s -static -municode -DSKIP_REGISTRY -o shim-noreg.exe gitbash-shim.c -lshell32 -ladvapi32
+
+      - name: Test
+        # The runner's console starts in UTF-8, where the shim's code page switch would go unnoticed.
+        run: |
+          chcp 437
+          node test.mjs bash.exe "C:\Program Files\Git\bin\bash.exe"
+
+      - name: Test Git Bash lookup
+        run: node test-locate.mjs shim-noreg.exe "C:\Program Files\Git\bin\bash.exe"
+
+      - name: Checksum
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 bash.exe).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText("$PWD\bash.exe.sha256", "$hash  bash.exe`n")
+          Get-Content bash.exe.sha256
+          & "C:\Program Files\Git\usr\bin\sha256sum.exe" -c bash.exe.sha256
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gitbash-shim
+          path: |
+            bash.exe
+            bash.exe.sha256
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: gitbash-shim
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          sha256sum -c bash.exe.sha256
+          prerelease=()
+          if [[ "$TAG" == *-* ]]; then prerelease=(--prerelease); fi
+          gh release create "$TAG" bash.exe bash.exe.sha256 --verify-tag --generate-notes "${prerelease[@]}"
