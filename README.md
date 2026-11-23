@@ -45,3 +45,7 @@ For how it works, its limits and building it yourself, see the [details](docs/de
 ## License
 
 [MIT](LICENSE). A personal project, provided as is. Issues are welcome, but replies are not guaranteed.
+
+## Links
+
+[LINUX DO](https://linux.do)

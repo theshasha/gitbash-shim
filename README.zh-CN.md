@@ -45,3 +45,7 @@ gitbash-shim 是一个放在 Git Bash 前面的 `bash.exe`，让命令原样到�
 ## 许可证
 
 [MIT](LICENSE)。个人项目，按现状提供。欢迎提 issue，但不保证回复。
+
+## 友链
+
+[LINUX DO](https://linux.do)
